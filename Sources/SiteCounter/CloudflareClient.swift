@@ -81,17 +81,11 @@ struct CloudflareClient {
     }
 
     private func get<T: Decodable>(_ path: String) async throws -> T {
-        struct Envelope: Decodable {
-            struct Message: Decodable { let code: Int?; let message: String }
-            let success: Bool
-            let errors: [Message]?
-            let result: T?
-        }
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let envelope = try? JSONDecoder().decode(Envelope.self, from: data) else {
+        guard let envelope = try? JSONDecoder().decode(RESTEnvelope<T>.self, from: data) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             throw CloudflareError(message: "Unexpected response from Cloudflare (HTTP \(status)).")
         }
@@ -225,6 +219,15 @@ struct CloudflareClient {
             .sorted { $0.requests > $1.requests }
         return (points, countries)
     }
+}
+
+// MARK: - REST decoding
+
+private struct RESTEnvelope<T: Decodable>: Decodable {
+    struct Message: Decodable { let code: Int?; let message: String }
+    let success: Bool
+    let errors: [Message]?
+    let result: T?
 }
 
 // MARK: - GraphQL decoding
