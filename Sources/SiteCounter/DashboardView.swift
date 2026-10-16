@@ -42,6 +42,18 @@ struct DashboardView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                if !store.zones.isEmpty {
+                    Picker("Domain", selection: $store.selection) {
+                        if store.zones.count > 1 {
+                            Text("All Domains").tag(StatsStore.allZones)
+                            Divider()
+                        }
+                        ForEach(store.zones) { Text($0.name).tag($0.id) }
+                    }
+                    .fixedSize()
+                }
+            }
             ToolbarItem(placement: .principal) {
                 Picker("Range", selection: $store.range) {
                     ForEach(StatsRange.allCases) { Text($0.rawValue).tag($0) }
@@ -80,7 +92,7 @@ struct DashboardView: View {
                 .foregroundStyle(.orange)
             Text("Connect to Cloudflare")
                 .font(.title2.bold())
-            Text("Add your API token, Zone ID and Account ID to see your site stats.")
+            Text("Add your Cloudflare API token to see stats for all your domains.")
                 .foregroundStyle(.secondary)
             Button("Open Settings…") { showingSettings = true }
                 .buttonStyle(.borderedProminent)
@@ -128,16 +140,19 @@ struct DashboardView: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(store.zone?.name ?? "Your Site")
+                Text(store.title)
                     .font(.largeTitle.bold())
                 HStack(spacing: 8) {
                     if let account = store.accountName {
                         Label(account, systemImage: "person.crop.circle")
                     }
-                    if let plan = store.zone?.plan {
+                    if store.selection == StatsStore.allZones {
+                        Text("\(store.zones.count) domains combined")
+                    }
+                    if let plan = store.selectedZone?.plan {
                         Text(plan)
                     }
-                    if let status = store.zone?.status {
+                    if let status = store.selectedZone?.status {
                         Text(status.capitalized)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)

@@ -41,7 +41,8 @@ struct CountryStat: Identifiable {
     }
 }
 
-struct ZoneInfo {
+struct ZoneInfo: Identifiable, Hashable {
+    let id: String
     let name: String
     let status: String
     let plan: String?
@@ -63,15 +64,31 @@ struct CloudflareClient {
 
     // MARK: REST
 
-    func zoneInfo(zoneID: String) async throws -> ZoneInfo {
+    /// Every domain the token can see, optionally limited to one account.
+    func listZones(accountID: String?) async throws -> [ZoneInfo] {
         struct Result: Decodable {
             struct Plan: Decodable { let name: String }
+            let id: String
             let name: String
             let status: String
             let plan: Plan?
         }
-        let result: Result = try await get("zones/\(zoneID)")
-        return ZoneInfo(name: result.name, status: result.status, plan: result.plan?.name)
+        var zones: [ZoneInfo] = []
+        var page = 1
+        while true {
+            var query = [
+                URLQueryItem(name: "per_page", value: "50"),
+                URLQueryItem(name: "page", value: String(page)),
+            ]
+            if let accountID, !accountID.isEmpty {
+                query.append(URLQueryItem(name: "account.id", value: accountID))
+            }
+            let results: [Result] = try await get("zones", query: query)
+            zones += results.map { ZoneInfo(id: $0.id, name: $0.name, status: $0.status, plan: $0.plan?.name) }
+            if results.count < 50 { break }
+            page += 1
+        }
+        return zones.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     func accountName(accountID: String) async throws -> String {
@@ -80,8 +97,10 @@ struct CloudflareClient {
         return result.name
     }
 
-    private func get<T: Decodable>(_ path: String) async throws -> T {
-        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+    private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
+        var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        if !query.isEmpty { components.queryItems = query }
+        var request = URLRequest(url: components.url!)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -98,7 +117,9 @@ struct CloudflareClient {
 
     // MARK: GraphQL analytics
 
-    func stats(zoneID: String, range: StatsRange) async throws -> (points: [StatPoint], countries: [CountryStat]) {
+    /// Traffic for one or more zones. With several zones, buckets for the
+    /// same time are added together.
+    func stats(zoneIDs: [String], range: StatsRange) async throws -> (points: [StatPoint], countries: [CountryStat]) {
         let fields = """
             sum {
               requests
@@ -113,14 +134,14 @@ struct CloudflareClient {
         """
 
         let query: String
-        let variables: [String: String]
+        let variables: [String: Any]
         let now = Date()
 
         if range.isHourly {
             query = """
-            query ($zoneTag: string, $since: Time, $until: Time) {
+            query ($zoneTags: [string!], $since: Time, $until: Time) {
               viewer {
-                zones(filter: { zoneTag: $zoneTag }) {
+                zones(filter: { zoneTag_in: $zoneTags }) {
                   groups: httpRequests1hGroups(
                     limit: 100
                     filter: { datetime_geq: $since, datetime_lt: $until }
@@ -135,15 +156,15 @@ struct CloudflareClient {
             """
             let since = Calendar.utc.dateInterval(of: .hour, for: now.addingTimeInterval(-23 * 3600))!.start
             variables = [
-                "zoneTag": zoneID,
+                "zoneTags": zoneIDs,
                 "since": Formatters.iso8601.string(from: since),
                 "until": Formatters.iso8601.string(from: now),
             ]
         } else {
             query = """
-            query ($zoneTag: string, $since: Date, $until: Date) {
+            query ($zoneTags: [string!], $since: Date, $until: Date) {
               viewer {
-                zones(filter: { zoneTag: $zoneTag }) {
+                zones(filter: { zoneTag_in: $zoneTags }) {
                   groups: httpRequests1dGroups(
                     limit: 100
                     filter: { date_geq: $since, date_leq: $until }
@@ -159,7 +180,7 @@ struct CloudflareClient {
             let days = range == .week ? 6 : 29
             let since = Calendar.utc.date(byAdding: .day, value: -days, to: now)!
             variables = [
-                "zoneTag": zoneID,
+                "zoneTags": zoneIDs,
                 "since": Formatters.day.string(from: since),
                 "until": Formatters.day.string(from: now),
             ]
@@ -183,12 +204,12 @@ struct CloudflareClient {
         if let errors = decoded.errors, !errors.isEmpty {
             throw CloudflareError(message: errors.map(\.message).joined(separator: "\n"))
         }
-        guard let zone = decoded.data?.viewer.zones.first else {
-            throw CloudflareError(message: "No analytics found for this zone. Check the Zone ID and that the token has Analytics Read access.")
+        guard let zones = decoded.data?.viewer.zones, !zones.isEmpty else {
+            throw CloudflareError(message: "No analytics found. Check that the token has Analytics Read access to this domain.")
         }
 
         var countryTotals: [String: Int] = [:]
-        let points: [StatPoint] = zone.groups.compactMap { group in
+        let perZone: [StatPoint] = zones.flatMap(\.groups).compactMap { group in
             let date: Date?
             if let datetime = group.dimensions.datetime {
                 date = Formatters.iso8601.date(from: datetime)
@@ -213,6 +234,21 @@ struct CloudflareClient {
                 threats: group.sum.threats
             )
         }
+
+        let points = Dictionary(grouping: perZone, by: \.date)
+            .map { date, items in
+                StatPoint(
+                    date: date,
+                    requests: items.reduce(0) { $0 + $1.requests },
+                    pageViews: items.reduce(0) { $0 + $1.pageViews },
+                    uniques: items.reduce(0) { $0 + $1.uniques },
+                    bytes: items.reduce(0) { $0 + $1.bytes },
+                    cachedBytes: items.reduce(0) { $0 + $1.cachedBytes },
+                    cachedRequests: items.reduce(0) { $0 + $1.cachedRequests },
+                    threats: items.reduce(0) { $0 + $1.threats }
+                )
+            }
+            .sorted { $0.date < $1.date }
 
         let countries = countryTotals
             .map { CountryStat(code: $0.key, requests: $0.value) }

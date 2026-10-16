@@ -7,7 +7,7 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(store.zone?.name ?? "Site Counter")
+            Text(store.isConfigured ? store.title : "Site Counter")
                 .font(.headline)
 
             if store.isConfigured {

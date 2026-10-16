@@ -32,14 +32,19 @@ the first time.)
 
 1. Go to <https://dash.cloudflare.com/profile/api-tokens> → **Create Token** →
    **Create Custom Token** with these permissions:
+   - **Zone → Zone → Read** (required, lists your domains)
    - **Zone → Analytics → Read** (required)
    - **Account → Account Settings → Read** (optional, shows your account name)
-   - Zone Resources: include your zone (or all zones).
+   - Zone Resources: **All zones** (or include each domain you want to see).
 2. Open Site Counter → **Settings** (⌘, or the gear button) and enter:
    - **API Token** – stored in your macOS Keychain
-   - **Zone ID** and **Account ID** – found on your domain's **Overview** page
-     in the Cloudflare dashboard (right-hand sidebar, "API" section).
+   - **Account ID** (optional) – limits the domain list to one account. It's on
+     any domain's **Overview** page in the Cloudflare dashboard (right-hand
+     sidebar, "API" section).
 3. Click **Save & Connect**.
+
+All domains the token can see are found automatically. Use the domain menu in
+the toolbar to switch between them, or pick **All Domains** to add them together.
 
 Stats refresh automatically every 5 minutes, or press ⌘R.
 

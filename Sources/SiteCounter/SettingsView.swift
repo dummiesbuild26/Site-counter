@@ -5,7 +5,6 @@ struct SettingsView: View {
     var onDone: (() -> Void)?
 
     @State private var token = ""
-    @State private var zoneID = ""
     @State private var accountID = ""
     @State private var saved = false
 
@@ -13,13 +12,12 @@ struct SettingsView: View {
         Form {
             Section {
                 SecureField("API Token", text: $token, prompt: Text(store.hasToken ? "Saved in Keychain — leave blank to keep" : "Paste your Cloudflare API token"))
-                TextField("Zone ID", text: $zoneID, prompt: Text("e.g. 023e105f4ecef8ad9ca31a8372d0c353"))
-                TextField("Account ID", text: $accountID, prompt: Text("Optional — shows your account name"))
+                TextField("Account ID", text: $accountID, prompt: Text("Optional — limits the list to one account"))
             } header: {
                 Text("Cloudflare Credentials")
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Create a token with **Zone → Analytics → Read** (and optionally **Account → Account Settings → Read**). The token is stored securely in your Keychain.")
+                    Text("Create a token with **Zone → Zone → Read** and **Zone → Analytics → Read** for **All zones** (optionally add **Account → Account Settings → Read** to show your account name). All your domains are found automatically. The token is stored securely in your Keychain.")
                     Link("Create an API token…", destination: URL(string: "https://dash.cloudflare.com/profile/api-tokens")!)
                 }
                 .font(.caption)
@@ -46,7 +44,6 @@ struct SettingsView: View {
                 Button("Save & Connect") {
                     store.save(
                         token: token,
-                        zoneID: zoneID,
                         accountID: accountID
                     )
                     token = ""
@@ -54,14 +51,13 @@ struct SettingsView: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
-                .disabled(zoneID.trimmingCharacters(in: .whitespaces).isEmpty || (token.isEmpty && !store.hasToken))
+                .disabled(token.isEmpty && !store.hasToken)
             }
         }
         .formStyle(.grouped)
         .frame(width: 520)
         .padding()
         .onAppear {
-            zoneID = store.zoneID
             accountID = store.accountID
         }
     }

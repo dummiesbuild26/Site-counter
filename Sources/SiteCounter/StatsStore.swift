@@ -5,7 +5,7 @@ import SwiftUI
 final class StatsStore: ObservableObject {
     @Published private(set) var points: [StatPoint] = []
     @Published private(set) var countries: [CountryStat] = []
-    @Published private(set) var zone: ZoneInfo?
+    @Published private(set) var zones: [ZoneInfo] = []
     @Published private(set) var accountName: String?
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
@@ -15,7 +15,19 @@ final class StatsStore: ObservableObject {
         didSet { if range != oldValue { refresh() } }
     }
 
-    @Published private(set) var zoneID: String
+    /// A zone ID, or `StatsStore.allZones` to add every domain together.
+    @Published var selection: String {
+        didSet {
+            guard selection != oldValue else { return }
+            UserDefaults.standard.set(selection, forKey: "selectedZone")
+            points = []
+            countries = []
+            refresh()
+        }
+    }
+
+    static let allZones = "all"
+
     @Published private(set) var accountID: String
     private var token: String
 
@@ -23,14 +35,23 @@ final class StatsStore: ObservableObject {
     private var autoRefreshTask: Task<Void, Never>?
 
     init() {
-        zoneID = UserDefaults.standard.string(forKey: "zoneID") ?? ""
+        // "zoneID" is where versions before multi-domain support kept the zone.
+        selection = UserDefaults.standard.string(forKey: "selectedZone")
+            ?? UserDefaults.standard.string(forKey: "zoneID") ?? ""
         accountID = UserDefaults.standard.string(forKey: "accountID") ?? ""
         token = Keychain.readToken() ?? ""
         startAutoRefresh()
     }
 
-    var isConfigured: Bool { !zoneID.isEmpty && !token.isEmpty }
+    var isConfigured: Bool { !token.isEmpty }
     var hasToken: Bool { !token.isEmpty }
+
+    var selectedZone: ZoneInfo? { zones.first { $0.id == selection } }
+
+    var title: String {
+        if selection == Self.allZones { return "All Domains" }
+        return selectedZone?.name ?? "Your Site"
+    }
 
     // MARK: Totals
 
@@ -51,19 +72,17 @@ final class StatsStore: ObservableObject {
 
     // MARK: Actions
 
-    func save(token newToken: String, zoneID newZoneID: String, accountID newAccountID: String) {
+    func save(token newToken: String, accountID newAccountID: String) {
         let trimmedToken = newToken.trimmingCharacters(in: .whitespacesAndNewlines)
         // An empty token field keeps the token already saved in the Keychain.
         if !trimmedToken.isEmpty, trimmedToken != token {
             token = trimmedToken
             Keychain.saveToken(trimmedToken)
         }
-        zoneID = newZoneID.trimmingCharacters(in: .whitespacesAndNewlines)
         accountID = newAccountID.trimmingCharacters(in: .whitespacesAndNewlines)
-        UserDefaults.standard.set(zoneID, forKey: "zoneID")
         UserDefaults.standard.set(accountID, forKey: "accountID")
 
-        zone = nil
+        zones = []
         accountName = nil
         points = []
         countries = []
@@ -84,23 +103,32 @@ final class StatsStore: ObservableObject {
         defer { isLoading = false }
 
         let client = CloudflareClient(token: token)
-        let zoneID = zoneID
         let accountID = accountID
         let range = range
 
         do {
-            async let stats = client.stats(zoneID: zoneID, range: range)
-            async let zoneInfo = try? client.zoneInfo(zoneID: zoneID)
             async let account: String? = accountID.isEmpty ? nil : (try? client.accountName(accountID: accountID))
 
-            let result = try await stats
-            let info = await zoneInfo
+            let found = try await client.listZones(accountID: accountID)
+            guard !Task.isCancelled else { return }
+            zones = found
+            guard !found.isEmpty else {
+                throw CloudflareError(message: "No domains found. Check that the token has Zone Read access and that the Account ID is correct.")
+            }
+
+            // Fall back to the first domain if nothing (or a removed domain) is selected.
+            if selection != Self.allZones, !found.contains(where: { $0.id == selection }) {
+                selection = found[0].id
+                return // Changing the selection starts a new refresh.
+            }
+            let zoneIDs = selection == Self.allZones ? found.map(\.id) : [selection]
+
+            let result = try await client.stats(zoneIDs: zoneIDs, range: range)
             let name = await account
             guard !Task.isCancelled else { return }
 
             points = result.points
             countries = result.countries
-            zone = info
             accountName = name
             lastUpdated = Date()
             errorMessage = nil
