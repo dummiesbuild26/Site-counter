@@ -22,6 +22,19 @@ struct StatPoint: Identifiable {
     let threats: Int
 
     var id: Date { date }
+
+    func adding(_ other: StatPoint) -> StatPoint {
+        StatPoint(
+            date: date,
+            requests: requests + other.requests,
+            pageViews: pageViews + other.pageViews,
+            uniques: uniques + other.uniques,
+            bytes: bytes + other.bytes,
+            cachedBytes: cachedBytes + other.cachedBytes,
+            cachedRequests: cachedRequests + other.cachedRequests,
+            threats: threats + other.threats
+        )
+    }
 }
 
 struct CountryStat: Identifiable {
@@ -235,20 +248,15 @@ struct CloudflareClient {
             )
         }
 
-        let points = Dictionary(grouping: perZone, by: \.date)
-            .map { date, items in
-                StatPoint(
-                    date: date,
-                    requests: items.reduce(0) { $0 + $1.requests },
-                    pageViews: items.reduce(0) { $0 + $1.pageViews },
-                    uniques: items.reduce(0) { $0 + $1.uniques },
-                    bytes: items.reduce(0) { $0 + $1.bytes },
-                    cachedBytes: items.reduce(0) { $0 + $1.cachedBytes },
-                    cachedRequests: items.reduce(0) { $0 + $1.cachedRequests },
-                    threats: items.reduce(0) { $0 + $1.threats }
-                )
+        var byDate: [Date: StatPoint] = [:]
+        for point in perZone {
+            guard let existing = byDate[point.date] else {
+                byDate[point.date] = point
+                continue
             }
-            .sorted { $0.date < $1.date }
+            byDate[point.date] = existing.adding(point)
+        }
+        let points = byDate.values.sorted { $0.date < $1.date }
 
         let countries = countryTotals
             .map { CountryStat(code: $0.key, requests: $0.value) }
