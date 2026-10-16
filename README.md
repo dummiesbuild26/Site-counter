@@ -22,8 +22,9 @@ open "build/Site Counter.app"
 
 You can also open `Package.swift` in Xcode and press ⌘R.
 
-Every push also builds the app on GitHub Actions — download `SiteCounter.zip`
-from the run's artifacts. (Because it's ad-hoc signed, right-click → **Open**
+Download the latest build from the repo's **Releases** page. To publish a new
+release, push a version tag (e.g. `git tag v1.1.0 && git push origin v1.1.0`);
+GitHub Actions builds the app and attaches `SiteCounter.zip` to the release. (Because it's ad-hoc signed, right-click → **Open**
 the first time.)
 
 ## Connecting to Cloudflare
