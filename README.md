@@ -28,6 +28,28 @@ with `SiteCounter.zip` attached. Pushing a `v*` tag publishes a release with
 that version instead. (Because it's ad-hoc signed, right-click → **Open**
 the first time.)
 
+## iPhone & iPad
+
+Each release also includes `SiteCounter.ipa`, an iOS 16+ version of the app
+with the same stats, domain picker and pull-to-refresh.
+
+The `.ipa` is unsigned, because installing on a device needs an Apple signing
+identity. Install it with a sideloading tool that signs it with your Apple ID:
+
+- **[Sideloadly](https://sideloadly.io)** (Mac/Windows): plug in your iPhone,
+  drag `SiteCounter.ipa` in, enter your Apple ID, click **Start**.
+- **[AltStore](https://altstore.io)**: install AltStore, then open the `.ipa`
+  from the Files app with AltStore.
+
+Then on the iPhone, go to **Settings → General → VPN & Device Management**, tap
+your Apple ID and **Trust** it. On iOS 16+, also turn on **Settings → Privacy &
+Security → Developer Mode**. With a free Apple ID the app has to be re-signed
+every 7 days (AltStore can do this automatically).
+
+To build it yourself: `brew install xcodegen && ./scripts/build-ipa.sh`, or run
+`xcodegen generate`, open `SiteCounter.xcodeproj` in Xcode, pick your team under
+Signing, and run it on your iPhone.
+
 ## Connecting to Cloudflare
 
 1. Go to <https://dash.cloudflare.com/profile/api-tokens> → **Create Token** →

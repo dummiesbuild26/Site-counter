@@ -98,6 +98,12 @@ final class StatsStore: ObservableObject {
         refreshTask = Task { await load() }
     }
 
+    /// Refreshes and waits for it to finish (used by pull-to-refresh).
+    func reload() async {
+        refresh()
+        await refreshTask?.value
+    }
+
     private func load() async {
         isLoading = true
         defer { isLoading = false }
