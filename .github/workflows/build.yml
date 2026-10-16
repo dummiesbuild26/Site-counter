@@ -16,6 +16,19 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build app bundle
         run: ./scripts/build-app.sh
+      - name: Launch test
+        run: |
+          open "build/Site Counter.app"
+          sleep 20
+          if pgrep -x SiteCounter >/dev/null; then
+            echo "App launched and is still running."
+            pkill -x SiteCounter
+          else
+            echo "::error::App quit during launch."
+            log show --last 2m --style compact --predicate 'process == "SiteCounter"' | tail -60 || true
+            for f in ~/Library/Logs/DiagnosticReports/SiteCounter*; do [ -f "$f" ] && head -150 "$f"; done
+            exit 1
+          fi
       - name: Zip app
         run: cd build && ditto -c -k --keepParent "Site Counter.app" SiteCounter.zip
       - uses: actions/upload-artifact@v4
