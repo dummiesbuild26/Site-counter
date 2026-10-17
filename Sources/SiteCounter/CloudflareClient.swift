@@ -59,6 +59,8 @@ struct ZoneInfo: Identifiable, Hashable {
     let name: String
     let status: String
     let plan: String?
+    let accountID: String?
+    let accountName: String?
 }
 
 struct CloudflareError: LocalizedError {
@@ -81,10 +83,12 @@ struct CloudflareClient {
     func listZones(accountID: String?) async throws -> [ZoneInfo] {
         struct Result: Decodable {
             struct Plan: Decodable { let name: String }
+            struct Account: Decodable { let id: String; let name: String? }
             let id: String
             let name: String
             let status: String
             let plan: Plan?
+            let account: Account?
         }
         var zones: [ZoneInfo] = []
         var page = 1
@@ -97,20 +101,17 @@ struct CloudflareClient {
                 query.append(URLQueryItem(name: "account.id", value: accountID))
             }
             let results: [Result] = try await get("zones", query: query)
-            zones += results.map { ZoneInfo(id: $0.id, name: $0.name, status: $0.status, plan: $0.plan?.name) }
+            zones += results.map {
+                ZoneInfo(id: $0.id, name: $0.name, status: $0.status, plan: $0.plan?.name,
+                         accountID: $0.account?.id, accountName: $0.account?.name)
+            }
             if results.count < 50 { break }
             page += 1
         }
         return zones.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    func accountName(accountID: String) async throws -> String {
-        struct Result: Decodable { let name: String }
-        let result: Result = try await get("accounts/\(accountID)")
-        return result.name
-    }
-
-    private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
+    func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
         var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { components.queryItems = query }
         var request = URLRequest(url: components.url!)
@@ -199,19 +200,12 @@ struct CloudflareClient {
             ]
         }
 
-        var request = URLRequest(url: baseURL.appendingPathComponent("graphql"))
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: ["query": query, "variables": variables])
-
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let data = try await graphQL(query: query, variables: variables)
         let decoded: GraphQLResponse
         do {
             decoded = try JSONDecoder().decode(GraphQLResponse.self, from: data)
         } catch {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            throw CloudflareError(message: "Could not read analytics response (HTTP \(status)).")
+            throw CloudflareError(message: "Could not read the traffic analytics response.")
         }
 
         if let errors = decoded.errors, !errors.isEmpty {
@@ -262,6 +256,21 @@ struct CloudflareClient {
             .map { CountryStat(code: $0.key, requests: $0.value) }
             .sorted { $0.requests > $1.requests }
         return (points, countries)
+    }
+}
+
+extension CloudflareClient {
+    func graphQL(query: String, variables: [String: Any]) async throws -> Data {
+        var request = URLRequest(url: URL(string: "https://api.cloudflare.com/client/v4/graphql")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["query": query, "variables": variables])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let status = (response as? HTTPURLResponse)?.statusCode, status >= 400, data.isEmpty {
+            throw CloudflareError(message: "Cloudflare returned HTTP \(status).")
+        }
+        return data
     }
 }
 

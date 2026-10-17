@@ -4,7 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var store: StatsStore
     @State private var showingSettings = false
-    @State private var metric: ChartMetric = .requests
+    @State private var metric: ChartMetric = .pageViews
 
     var body: some View {
         NavigationStack {
@@ -83,6 +83,12 @@ struct ContentView: View {
 
                 infoRow
 
+                if let note = store.webAnalyticsNote {
+                    Label(note, systemImage: "info.circle")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 if let error = store.errorMessage {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
                         .font(.callout)
@@ -93,9 +99,9 @@ struct ContentView: View {
                 }
 
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                    StatTile(title: "Requests", value: store.totalRequests.compact, icon: "arrow.left.arrow.right", tint: .orange)
                     StatTile(title: "Page Views", value: store.totalPageViews.compact, icon: "doc.text", tint: .blue)
-                    StatTile(title: "Visitors", value: store.totalUniques.compact, icon: "person.2", tint: .purple)
+                    StatTile(title: "Visits", value: store.totalVisits.compact, icon: "person.2", tint: .purple)
+                    StatTile(title: "All Requests", value: store.totalRequests.compact, icon: "arrow.left.arrow.right", tint: .orange)
                     StatTile(title: "Bandwidth", value: store.totalBytes.bytes, icon: "arrow.down.circle", tint: .teal)
                     StatTile(title: "Cached", value: store.cacheRatio.formatted(.percent.precision(.fractionLength(1))), icon: "bolt", tint: .green)
                     StatTile(title: "Threats", value: store.totalThreats.compact, icon: "shield.lefthalf.filled", tint: .red)
@@ -148,23 +154,23 @@ struct ContentView: View {
                 .labelsHidden()
             }
 
-            if store.points.isEmpty {
+            if store.series(metric).isEmpty {
                 Text(store.isLoading ? "Loading…" : "No data for this period.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 200)
             } else {
-                Chart(store.points) { point in
+                Chart(store.series(metric)) { point in
                     let unit: Calendar.Component = store.range.isHourly ? .hour : .day
                     AreaMark(
                         x: .value("Time", point.date, unit: unit),
-                        y: .value(metric.rawValue, metric.value(point))
+                        y: .value(metric.rawValue, point.value)
                     )
                     .foregroundStyle(metric.color.opacity(0.2).gradient)
                     .interpolationMethod(.monotone)
 
                     LineMark(
                         x: .value("Time", point.date, unit: unit),
-                        y: .value(metric.rawValue, metric.value(point))
+                        y: .value(metric.rawValue, point.value)
                     )
                     .foregroundStyle(metric.color)
                     .interpolationMethod(.monotone)

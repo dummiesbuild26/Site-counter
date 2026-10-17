@@ -15,9 +15,9 @@ struct MenuBarView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
-                    row("Requests", store.totalRequests.compact)
                     row("Page Views", store.totalPageViews.compact)
-                    row("Visitors", store.totalUniques.compact)
+                    row("Visits", store.totalVisits.compact)
+                    row("All Requests", store.totalRequests.compact)
                     row("Bandwidth", store.totalBytes.bytes)
                     row("Threats", store.totalThreats.compact)
                 }

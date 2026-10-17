@@ -15,6 +15,7 @@ targets:
       - path: Sources/SiteCounter/Keychain.swift
       - path: Sources/SiteCounter/StatsStore.swift
       - path: Sources/SiteCounter/Formatting.swift
+      - path: Sources/SiteCounter/WebAnalytics.swift
     info:
       path: Config/iOS-Info.plist
       properties:

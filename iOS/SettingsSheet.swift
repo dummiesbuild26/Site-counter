@@ -21,7 +21,7 @@ struct SettingsSheet: View {
                     Text("Cloudflare Credentials")
                 } footer: {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Create a token with **Zone → Zone → Read** and **Zone → Analytics → Read** for **All zones**. Add **Account → Account Settings → Read** to show your account name. The token is stored securely in your Keychain.")
+                        Text("Create a token with **Zone → Zone → Read**, **Zone → Analytics → Read** and **Account → Account Analytics → Read** (for Web Analytics page views and visits), covering **All zones**. The token is stored securely in your Keychain.")
                         Link("Create an API token", destination: URL(string: "https://dash.cloudflare.com/profile/api-tokens")!)
                     }
                 }

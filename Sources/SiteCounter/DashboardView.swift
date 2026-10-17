@@ -4,7 +4,7 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject private var store: StatsStore
     @State private var showingSettings = false
-    @State private var metric: ChartMetric = .requests
+    @State private var metric: ChartMetric = .pageViews
 
     var body: some View {
         Group {
@@ -82,6 +82,13 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
 
+                if let note = store.webAnalyticsNote {
+                    Label(note, systemImage: "info.circle")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+
                 if let error = store.errorMessage {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
@@ -92,9 +99,9 @@ struct DashboardView: View {
                 }
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
-                    StatCard(title: "Requests", value: store.totalRequests.compact, icon: "arrow.left.arrow.right", tint: .orange)
                     StatCard(title: "Page Views", value: store.totalPageViews.compact, icon: "doc.text", tint: .blue)
-                    StatCard(title: "Unique Visitors", value: store.totalUniques.compact, icon: "person.2", tint: .purple)
+                    StatCard(title: "Visits", value: store.totalVisits.compact, icon: "person.2", tint: .purple)
+                    StatCard(title: "All Requests", value: store.totalRequests.compact, icon: "arrow.left.arrow.right", tint: .orange)
                     StatCard(title: "Bandwidth", value: store.totalBytes.bytes, icon: "arrow.down.circle", tint: .teal)
                     StatCard(title: "Cached", value: store.cacheRatio.formatted(.percent.precision(.fractionLength(1))), icon: "bolt", tint: .green)
                     StatCard(title: "Threats Blocked", value: store.totalThreats.compact, icon: "shield.lefthalf.filled", tint: .red)
@@ -158,23 +165,23 @@ struct DashboardView: View {
                 .fixedSize()
             }
 
-            if store.points.isEmpty {
+            if store.series(metric).isEmpty {
                 Text(store.isLoading ? "Loading…" : "No data for this period.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 240)
             } else {
-                Chart(store.points) { point in
+                Chart(store.series(metric)) { point in
                     let unit: Calendar.Component = store.range.isHourly ? .hour : .day
                     AreaMark(
                         x: .value("Time", point.date, unit: unit),
-                        y: .value(metric.rawValue, metric.value(point))
+                        y: .value(metric.rawValue, point.value)
                     )
                     .foregroundStyle(metric.color.opacity(0.2).gradient)
                     .interpolationMethod(.monotone)
 
                     LineMark(
                         x: .value("Time", point.date, unit: unit),
-                        y: .value(metric.rawValue, metric.value(point))
+                        y: .value(metric.rawValue, point.value)
                     )
                     .foregroundStyle(metric.color)
                     .interpolationMethod(.monotone)

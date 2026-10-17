@@ -37,7 +37,7 @@ struct SiteCounterApp: App {
                 .environmentObject(store)
         } label: {
             Label {
-                Text(store.isConfigured ? store.totalRequests.compact : "")
+                Text(store.isConfigured ? store.totalPageViews.compact : "")
             } icon: {
                 Image(systemName: "chart.bar.xaxis")
             }

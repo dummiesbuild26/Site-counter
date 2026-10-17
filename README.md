@@ -56,6 +56,8 @@ Signing, and run it on your iPhone.
    **Create Custom Token** with these permissions:
    - **Zone → Zone → Read** (required, lists your domains)
    - **Zone → Analytics → Read** (required)
+   - **Account → Account Analytics → Read** (for Web Analytics page views and
+     visits, so the numbers match the dashboard's Web Analytics page)
    - **Account → Account Settings → Read** (optional, shows your account name)
    - Zone Resources: **All zones** (or include each domain you want to see).
 2. Open Site Counter → **Settings** (⌘, or the gear button) and enter:
@@ -72,7 +74,11 @@ Stats refresh automatically every 5 minutes, or press ⌘R.
 
 ## How it works
 
-- Traffic data comes from Cloudflare's GraphQL Analytics API
+- Page views, visits and countries come from Cloudflare Web Analytics
+  (`rumPageloadEventsAdaptiveGroups`), the same data as the dashboard's Web
+  Analytics page, with bots left out. If Web Analytics isn't set up for a
+  domain, the app falls back to estimates from zone traffic.
+- All requests, bandwidth, cache and threats come from Cloudflare's GraphQL Analytics API
   (`httpRequests1hGroups` for the 24-hour view, `httpRequests1dGroups` for
   7 / 30 days).
 - Zone and account names come from the REST API (`/zones/{id}`,
